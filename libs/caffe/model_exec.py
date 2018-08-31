@@ -18,11 +18,13 @@ from caffe import layers as cl
 from caffe import params as P
 from caffe import to_proto
 
+
 class ModelExec:
-    def __init__(self, model_dir, hyper_parameters, state_space_parameters):
+    def __init__(self, model_dir, hyper_parameters, state_space_parameters, logger):
         self.model_dir = model_dir
         self.hp = hyper_parameters
         self.ssp = state_space_parameters
+        self.logger = logger
 
     # Runs the model based on description.
     def run_one_model(self, model_descr, gpu_to_use=None):
@@ -43,7 +45,8 @@ class ModelExec:
                 if self.hp.NUM_ITER_TO_TRY_LR in acc_dict:
                     acc = acc_dict[self.hp.NUM_ITER_TO_TRY_LR]
             if not acc:
-                acc, acc_dict = run_caffe_return_accuracy(solver_path, log_file, self.hp.CAFFE_ROOT, gpu_to_use=gpu_to_use)
+                acc, acc_dict = run_caffe_return_accuracy(solver_path, log_file, self.hp.CAFFE_ROOT, gpu_to_use=gpu_to_use, model_id=model_descr, logger=self.logger)
+
 
             if check_out_of_memory(log_file):
                 return {'learning_rate': learning_rate,

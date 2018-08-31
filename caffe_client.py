@@ -5,11 +5,62 @@ import socket
 import argparse
 import os
 import shutil
-
+import datetime
+import json
 
 import pandas as pd
 from libs.caffe.model_exec import ModelExec
 from libs.misc.clear_trained_models import clear_redundant_logs_caffe
+from sets import Set
+
+DATESTRING = '%Y-%m-%dT%H:%M:%S.%f'
+
+class Logger():
+    def __init__(self, filename):
+        self.log_rows = []
+        self.filename = filename
+        self.models = Set()
+
+    def log_model(self, model):
+        self.models.add(model['id'])
+        self.log_rows.append({
+            'timestamp': self.current_time(),
+            'values': {
+                'model': {
+                    'NNModel': {
+                        '_layers': model['_layers'],
+                        # 'nparam': model['nparam']
+                    }
+                }
+            },
+            'uid': model['id'],
+            'etime': [model['id']]
+        })
+
+    def log_measurements(self, model, epoch, measurements, time=None):
+        if time:
+            self.log_rows.append({
+                'timestamp': time,
+                'values': measurements,
+                'uid': model['id'],
+                'etime': [model['id'], '0', epoch]
+                })
+        else:
+            self.log_rows.append({
+                'timestamp': self.current_time(),
+                'values': measurements,
+                'uid': model['id'],
+                'etime': [model['id'], '0', epoch]
+                })
+
+    def current_time(self):
+        return datetime.datetime.now().strftime(DATESTRING)
+
+    def save_log(self):
+        with open(self.filename, 'w') as outfile:
+            json.dump(self.log_rows, outfile)
+
+logger = Logger('testmetaqnn.json')
 
 def rm_model_dir(base_ckpt_dir, net):
     ckpt_file_map_file = os.path.join(base_ckpt_dir, 'file_map.csv')
@@ -70,11 +121,12 @@ class QClient(protocol.Protocol):
                                                                               10000,
                                                                               float(out['epsilon']),
                  
-                                                                              int(out['iteration_number'])))
+                                                                              int(out['iteration_number']),
+                                                                              logger=logger))
             else:
                 model_dir = get_model_dir(self.factory.hyper_parameters.CHECKPOINT_DIR, out['net_string'])
 
-                trainer = ModelExec(model_dir, self.factory.hyper_parameters, self.factory.state_space_parameters)
+                trainer = ModelExec(model_dir, self.factory.hyper_parameters, self.factory.state_space_parameters, logger)
 
                 train_out = trainer.run_one_model(out['net_string'], gpu_to_use=self.factory.gpu_to_use)
                 print 'OUT', train_out
@@ -105,7 +157,8 @@ class QClient(protocol.Protocol):
                                                                                   acc_last,
                                                                                   iter_last,
                                                                                   float(out['epsilon']),
-                                                                                  int(out['iteration_number'])))
+                                                                                  int(out['iteration_number']),
+                                                                                  logger=logger))
 
 
     
